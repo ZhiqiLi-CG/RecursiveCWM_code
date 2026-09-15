@@ -1,11 +1,16 @@
+# Supported interpreter: CPython 3.12.x (../.python-version; see ../docs/environment.md).
 # Extra packages for the record-only metrics, the paper's tables/figures and the tests
 # (experiments/eval_metrics.py, make_case_figures.py, make_novel_views.py, tests/).
 # CPU-only torch is enough; the first metrics run downloads the LPIPS (alex) and CLIP ViT-B/32 weights.
+# Include the base pins when this file is installed directly.
+-r requirements-runtime.txt
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.5.1+cpu
 torchvision==0.20.1+cpu
 opencv-python-headless==5.0.0.93
 scikit-image==0.26.0
+# Used directly by eval_metrics.py for color-histogram distances.
+scipy==1.18.1
 lpips==0.1.4
 open_clip_torch==3.3.0
 pytest==9.1.1

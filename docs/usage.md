@@ -26,7 +26,7 @@ The original section numbers are retained so the cross-references still apply.
 ## 2. Requirements
 
 - Linux x86_64 (arm64 also works for the runtime; the paper ran on Ubuntu). macOS is untested.
-- Python 3.10–3.12 (a system `python3` with `venv`, or conda/mamba), `curl`, `tar`, `git`. Network access for the install
+- CPython 3.12.x (a system `python3` with `venv`, or conda/mamba), `curl`, `tar`, `git`. Network access for the install
   and for the model. The install never touches the Python environment you are in (see §3).
 - The OpenAI **Codex CLI**, logged in. Install: `npm install -g @openai/codex` (any Node ≥ 18 on PATH, or the one the setup script installs), then `codex login`. The runner calls `codex exec` once per node and parses its `session id:` and `tokens used` lines; the paper used codex-cli 0.153.0 (0.154 verified compatible).
 - Model access: an account that can run `gpt-6-astra`. The runner asks for that model at reasoning effort `high` on
@@ -50,18 +50,23 @@ numpy), Node.js 22 downloaded from nodejs.org (or `--node-from /path/to/node` to
 Playwright 1.62.1 with headless Chromium, then renders a test cube and checks the screenshot. It is idempotent; rerun it
 after a failure.
 
+**Python compatibility.** Both the runtime and `--metrics` require CPython 3.12.x; the NumPy pin requires
+3.12+, and the pinned torch/torchvision pair supports through 3.12. See [the compatibility and recovery guide](environment.md#python-compatibility).
+
 **Python environments.** Nothing is installed into the environment you are in, and nothing needs to be activated later:
 every script calls `$RCWM_ROOT/.venv/bin/python` by path.
 
 | you use | do this | what you get |
 |---|---|---|
-| a system Python | `bash setup/setup_runtime.sh /path/to/rcwm-runtime` | a venv at `$RCWM_ROOT/.venv` made from `python3` (`--python /path/to/python3.12` to choose the interpreter) |
-| conda / mamba / micromamba | `bash setup/setup_runtime.sh /path/to/rcwm-runtime --conda rcwm` | a dedicated conda env `rcwm` (created with `python=3.12` if it does not exist), linked as `$RCWM_ROOT/.venv`; the pinned packages go into that env only |
+| a system Python | `bash setup/setup_runtime.sh /path/to/rcwm-runtime` | a venv at `$RCWM_ROOT/.venv` made from `python3.12` when available, otherwise `python3` (`--python /path/to/python3.12` to choose the interpreter) |
+| conda / mamba / micromamba | `bash setup/setup_runtime.sh /path/to/rcwm-runtime --conda rcwm` | a private venv at `$RCWM_ROOT/.venv`, created using Python from conda env `rcwm` (created with `python=3.12` if missing); packages already in the conda env are excluded |
 
-If a conda `base` environment is active in your shell, use `--conda` (or `--python /usr/bin/python3`) rather than the
-default, so the venv is not built on top of `base` and no package lands in it. `--metrics` installs the torch/opencv/
-scikit-image/lpips/open_clip pins into the same private environment, not into yours; if you already have a conda env
-with compatible versions, point `--conda` at it. `RCWM_CONDA=/path/to/conda` names the binary when it is not on PATH.
+`--conda` supplies an interpreter for the private venv, even when a conda `base` environment is active.
+`--metrics` installs the torch/opencv/scipy/scikit-image/lpips/open_clip pins and their dependencies into that venv.
+`RCWM_CONDA=/path/to/conda` names the binary when it is not on PATH. Setup isolates Python/pip from inherited
+package paths and pip configuration. If an old venv has conflicting packages, rerun with `--recreate-venv`
+(and `--metrics` for evaluation); the old venv is backed up and rebuilt. Old direct conda links migrate
+automatically. See [dependency recovery](environment.md#dependency-conflicts-and-recovery).
 Chromium's browser files go to `$PLAYWRIGHT_BROWSERS_PATH` (default `~/.cache/ms-playwright`); set that variable before
 the script and before every launch if you want them elsewhere.
 

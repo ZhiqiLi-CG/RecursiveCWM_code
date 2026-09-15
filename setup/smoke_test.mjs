@@ -30,6 +30,6 @@ const png = path.join(outDir, 'smoke.png'); await page.screenshot({ path: png })
 await browser.close(); server.close();
 if (errors.length) { console.error('page errors: ' + errors.join(' | ')); process.exit(1); }
 const py = path.join(root, '.venv/bin/python');
-const check = execFileSync(py, ['-c', `from PIL import Image; import numpy as np; a=np.asarray(Image.open('${png}').convert('RGB')); print('red pixels:', int(((a[:,:,0]>150)&(a[:,:,1]<120)).sum()))`]).toString().trim();
+const check = execFileSync(py, ['-I', '-c', `from PIL import Image; import numpy as np; a=np.asarray(Image.open('${png}').convert('RGB')); print('red pixels:', int(((a[:,:,0]>150)&(a[:,:,1]<120)).sum()))`]).toString().trim();
 console.log(`smoke test ok: ${png}  (${check})`);
 if (!/red pixels: [1-9]/.test(check)) { console.error('the rendered box is missing from the screenshot (WebGL not working in headless Chromium?)'); process.exit(1); }

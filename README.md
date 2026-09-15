@@ -21,8 +21,10 @@ Numeric scores are recorded afterwards, never used as gates.
 
 ## Quick start
 
-Use Linux with Python 3.10–3.12 (with `venv`), `curl`, `tar`, `git`, and an account with access to `gpt-6-astra`.
-Install the runtime below; for conda/mamba, add `--conda rcwm` to the setup command.
+Use Linux with CPython 3.12.x (with `venv`), `curl`, `tar`, `git`, and an account with access to `gpt-6-astra`.
+Install the runtime below; for conda/mamba, add `--conda rcwm` to create a Python 3.12 environment.
+To select an installed interpreter, add `--python /path/to/python3.12`. See [Python compatibility](docs/environment.md#python-compatibility) for the dependency constraints and recovery steps.
+For dependency conflicts in an existing runtime, add `--recreate-venv` to back up and rebuild its Python environment.
 The defaults use the paper's English instruction, private Codex home, `gpt-6-astra` at `high`, depth 4 and 3 cycles per node.
 
 ```bash
