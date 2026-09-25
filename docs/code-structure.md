@@ -38,6 +38,7 @@ RecursiveCWM_code/
     make_codex_home.sh                  private Codex configuration, login copy, and skill
     resume_run.sh                       interruption recovery entry point
     diagnose_run.sh                     run-file diagnostics: tree, cost, deliveries, renders, and failures
+    performance_monitor.py              lightweight Linux sampling, incremental traces, and performance reports
     score_run.py                        one-run metrics, recursion, and usage report
     view.sh, view_server.mjs             interactive viewer launcher and HTTP server
     render_views.sh                     reference-camera and novel-view render wrapper
@@ -75,6 +76,7 @@ RecursiveCWM_code/
     SKILL.md                           terrain and scene-building toolbox
   tests/
     test_runner_offline.sh             launch contract with a fake Codex executable
+    test_performance_monitor.py        sampling, trace tails, shutdown, and report checks (stdlib unittest)
     fake-codex/codex                   deterministic root/children/resume stand-in
     test_camera_crop.py                camera-crop homography geometry tests
     test_check_part.py                 delivery shapes, nested child IDs, paths, and objects

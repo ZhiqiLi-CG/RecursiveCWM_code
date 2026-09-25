@@ -189,6 +189,76 @@ every node's delivery and how many renders it made (a node with none worked blin
 signatures in the session logs (Chromium not launching, sandbox denials, full disk, quota, dropped connections). Paste
 its output when asking for help.
 
+### Lightweight performance monitoring (Linux)
+
+`tools/performance_monitor.py` uses only Python's standard library and `/proc`. It samples every
+10 seconds by default, reads new trace events incrementally (at most 256 KiB per run per sample),
+and never scans agent logs, reads credentials, calls an API, or launches a renderer. It discovers
+runs in a run directory, a workspace, or a batch containing separate workspaces. No installation
+or change to the running experiment is required.
+
+To attach to the four-trial batch launched with `batch.pid`:
+
+```bash
+# RCWM_BATCH is the batch directory printed when you launched the trials.
+nohup python3 tools/performance_monitor.py watch "$RCWM_BATCH" \
+  --pid "$(cat "$RCWM_BATCH/batch.pid")" \
+  > "$RCWM_BATCH/monitor-console.log" 2>&1 < /dev/null &
+echo "$!" > "$RCWM_BATCH/monitor.pid"
+```
+
+The tool creates a uniquely named `performance-<UTC time>-<monitor PID>.jsonl` in the target
+directory. It automatically exits when the watched PID exits (also detecting PID reuse), then
+writes a Markdown report beside the log with the same stem. The watched PID should be the batch
+launcher or run launcher, not an individual agent. Runs that start later in the batch are discovered
+on subsequent samples. Without `--pid`, monitoring continues until interrupted; `--duration 600`
+limits it to ten minutes. SIGINT/SIGTERM stop only the monitor and finalize its report:
+
+```bash
+kill -TERM "$(cat "$RCWM_BATCH/monitor.pid")"
+```
+
+For a single run, or a summary while monitoring is still active:
+
+```bash
+python3 tools/performance_monitor.py watch "$RCWM_ROOT/runs/medieval-village" --duration 600
+python3 tools/performance_monitor.py report /path/to/performance-20260917T120000-12345.jsonl
+```
+
+`--interval 30` reduces sampling frequency. `--output /path/to/new-log.jsonl` chooses an explicit
+log path; existing logs/reports are never overwritten. The startup console output gives the exact
+log path. Keep the normal launch log and recursion trace as well: performance logs are separate.
+
+The JSONL records contain host CPU busy/I/O-wait percentages, load average, available memory and
+swap usage. With `--pid`, they also contain sampled descendant process count, CPU usage and summed
+RSS. Each run records active sessions, starts/ends, trace peak concurrency, last event time and root
+stop status. `monitor_sample_ms` records time spent collecting each sample so overhead is visible.
+The report summarizes time-weighted resource means and extrema plus per-run recursion activity.
+
+Interpretation: host measurements include other workloads. Process CPU uses 100% per occupied core;
+summed RSS double-counts shared pages, and short-lived or detached processes may be missed. Active
+sessions include time waiting for remote inference and tools; low local CPU does not prove API
+throttling. GPU utilization and provider latency are not measured. Trace counts include history before
+attachment; resource samples cover only the monitoring window. Abruptly terminated agents may lack
+session-end events, so active counts can be stale. A root stop is not proof
+of successful delivery. A killed monitor's existing JSONL can still be summarized with `report`.
+
+Robustness: transient resource-read failures produce `null` measurements and warnings, then are
+retried on the next sample. Unreadable traces are retried; incomplete lines are buffered, and malformed
+records are skipped. Replaced/truncated trace files reset their counters. Unreadable watched-PID data
+is reported as a warning rather than assumed to mean the batch exited. Reporting tolerates damaged
+or incomplete JSONL records and states how many were skipped. Fatal sampling/write errors stop only
+the monitor; it attempts a report from intact records. A full disk may prevent both further logging
+and report creation, so check `monitor-console.log` for errors. The experiment is never signalled.
+
+The monitor has synthetic tests for four sequential runs with parallel children, partial writes,
+trace replacement, missing resource readings, PID reuse, signal handling and injected write failures.
+These exercise the actual batch layout without model calls or rendering:
+
+```bash
+python3 -m unittest discover -s tests -p test_performance_monitor.py -v
+```
+
 **Score.** With the metrics packages installed (`--metrics`), one JSON line with the chosen final render, PSNR / SSIM /
 edge-F1 / LPIPS / CLIP against the reference, nodes, depth, nodes per level, delivered parts, tokens and wall time:
 

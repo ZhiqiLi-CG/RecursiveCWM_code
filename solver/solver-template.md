@@ -13,18 +13,46 @@ solve and calibrate one first and verify the full-frame overlay by eye before lo
    magnification; look for the conspicuous residuals by eye; repeat as needed. Also take one or two
    rotated views — any flatness a side view exposes (paper walls, billboard trees, parts without
    thickness) is a real residual and goes on the repair list right away.
-2. **Parts**: repair here what can be repaired here. **A sub-problem that deserves its own solve**
-   (one sub-object or sub-assembly that patching at this level cannot fix and that needs its own
-   target image and loop) is not to be forced through.
-   The test: take each part of the side-by-side where you can still see a difference and magnify
-   it on its own. If what you see is **a group of objects and the layout relations between them**
-   (arrangement, spacing, orientation, attachment) that this level has not yet produced, or
-   **a single thing whose internal structure is complex enough to need its own loop**, it is a
-   sub-problem: descend. If it is only a simple single thing or scattered small differences,
-   finish it at this level. A level usually cuts two to four children; most scenes close in two
-   or three levels.
+2. **Parts**: choose local repairs and recursive work from the **unresolved structure in the
+   current reconstruction**, compared with the reference at matched magnification.
+   Take each part of the side-by-side where you can still see a difference and magnify it on
+   its own. Use the following questions to decide what to do:
+
+   - **What differs?** Identify a concrete structure or relationship: for example, houses with
+     incorrect spacing and roof orientations, or missing cliff structure. "Needs more detail"
+     alone does not identify a reconstruction task.
+   - **Where does the cause belong?** Repair bounded differences locally, such as one roof's
+     height. Repair shared causes at the ancestor that controls them: houses displaced together
+     need a shared placement correction, not separate child solves. If the cause is outside
+     your write scope, report it to the owning parent in account.md. Do not create descendants
+     to compensate for an inherited camera, placement, or shared-geometry error.
+   - **What would a separate solve accomplish?** Descend when a coherent unresolved object,
+     interacting assembly, or continuous surface region needs its own repeated observation,
+     construction, and review loop. State what that loop must resolve and why a bounded local
+     edit is insufficient. Reopen an existing child when the remaining work belongs to it.
+     When the need for a focused solve is already clear, descend without first forcing several
+     failed local repairs. Finish simple things and scattered small differences at this level.
+
+   **Choose the number of children by grouping the unresolved work:**
+
+   - Split a proposed task when it contains distinguishable unresolved structures that benefit
+     from different focused views or modeling procedures, with separable editable
+     responsibilities. Keep their shared relationships under the parent's control.
+   - Keep structures together when their arrangement or interaction is the main problem, when
+     one shared construction procedure can repair them together, or when separating them would
+     leave only trivial edits for individual children.
+
+   Each child receives this same complete solver. Image area, object count, and semantic labels
+   do not prescribe a child count or hierarchy. Eleven houses may need a shared local repair,
+   several group solves, or a focused solve for one complex house; a large mountain may need
+   fewer solves than a small market. These are examples, not required decompositions. Choose
+   children from the remaining work; there is no target branching factor or preferred depth.
+   If inspection finds no actionable discrepancy, finish; otherwise repair locally or descend
+   as appropriate within the runtime's limits.
+
    For a sub-problem, prepare its materials under
    __CHAIN__/fractal/<child>/ (target.png cut from your target and magnified / view.json / brief.md),
+   explain the unresolved work and the reason for a focused solve in its brief.md,
    list the child in children.json in your directory (a JSON array, e.g. ["part-a","part-b"]),
    then **end the session** — the runner starts this same solver for every child and wakes you
    with the results when they are done.
