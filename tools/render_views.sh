@@ -14,12 +14,13 @@ D="$RUN/fractal/scene"
 REL="${RUN#$ROOT/}/fractal/scene/index.html"
 # viewport = the frame of the delivered final render (fractal/scene/final.png; else the reference image), unless given
 if [ -z "$VP" ]; then
-  for f in "$D/final.png" "$D/FINAL.png" "$D/target.png"; do
+  for f in "$D/outputs/final.png" "$D/final.png" "$D/FINAL.png" "$D/target.png"; do
     [ -f "$f" ] && { VP=$("$ROOT/.venv/bin/python" -c "from PIL import Image;w,h=Image.open('$f').size;print(f'{w}x{h}')" 2>/dev/null); [ -n "$VP" ] && break; }
   done
 fi
+OUT="$D/work/postprocess"; mkdir -p "$OUT"
 echo "viewport: ${VP:-1400x963 (default)}"
-echo "hi-res:  $D/final-hires.png"
-"$NODE" "$CODE/tools/hires_render.mjs" "$ROOT" "$REL" "$D/final-hires.png" "$SCALE" "$READY" "$VP" || exit 1
-echo "views:   $D/novel-views/"
-"$NODE" "$CODE/tools/novel_views.mjs" "$ROOT" "$REL" "$D/novel-views" "$READY" "$VP"
+echo "hi-res:  $OUT/final-hires.png"
+"$NODE" "$CODE/tools/hires_render.mjs" "$ROOT" "$REL" "$OUT/final-hires.png" "$SCALE" "$READY" "$VP" || exit 1
+echo "views:   $OUT/novel-views/"
+"$NODE" "$CODE/tools/novel_views.mjs" "$ROOT" "$REL" "$OUT/novel-views" "$READY" "$VP"

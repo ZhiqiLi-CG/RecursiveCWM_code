@@ -1,4 +1,10 @@
 <h1 align="center">Recursive Code World Models</h1>
+
+New runs use the [v2 result and log contract](docs/output-contract.md): the canonical image is
+`fractal/scene/outputs/final.png`; `result.json` records validated completion.
+Node transcripts are `logs/codex.log` and `logs/sessions/session-NNNN.log`.
+Historical paper runs retain their original filenames and unversioned manifests.
+
 <p align="center">Building Complex Worlds through Recursive Scene Programs</p>
 <p align="center">Zhiqi Li · Yuxuan Liao · Bo Zhu</p>
 <p align="center">

@@ -89,140 +89,75 @@ within its own node directory. The worldgen skill supplies techniques, not anoth
 The [reference inventory](../experiments/pilot-scenes/REFERENCES.md) explains the six supplied images
 and the four WorldClaw-derived references that must be obtained or rebuilt separately.
 
-## Execution flow
+## Execution flow and public output interface (v2)
 
-```mermaid
-flowchart TD
-    A[rcwm.sh: prepare root and conditions] --> B[runner/solve_recursive.sh: solve node]
-    B --> C[Codex session: same solver instruction]
-    C --> D{children.json and depth below cap?}
-    D -->|yes| E[Launch solve_recursive.sh for each child in parallel]
-    E --> F[Wait; record child returns and delivered list]
-    F -->|next cycle within limit| C
-    D -->|no| G[runner/check_part.py]
-    F -->|cycle limit reached| G
-    G --> H[Trace stop event]
-    H --> I[rcwm.sh: trace report and root delivery paths]
-```
+The authoritative path/schema/log reference is [output-contract.md](output-contract.md).
+New runs use strict v2; unversioned historical artifacts remain readable by the legacy checker.
 
-1. [rcwm.sh](../rcwm.sh) resolves its checkout, runtime, and instruction; checks the runtime executables,
-   instruction, and Codex availability; selects the model/effort and prepares the private Codex home.
-   It refuses a run whose root `target.png` already exists, copies the reference without resizing it,
-   writes root `view.json` and `brief.md`, records `conditions.json`, and calls the runner with
-   `runs/<run-name> scene - 0 <run-name>`.
-2. [solve_recursive.sh](../runner/solve_recursive.sh) changes directory to `RCWM_ROOT`, creates the node
-   and trace directories, computes instruction/camera/snapshot identifiers, and writes `manifest.json`
-   if absent. It substitutes `__NODE__`, `__CHAIN__`, and `__DEPTH__` in the instruction to make `task.md`.
-   At the depth cap it appends a note telling the solver to finish without requesting children.
-3. Each active cycle starts or resumes `codex exec`. The runner explicitly passes the model, reasoning
-   effort, `workspace-write`, network access, and the writable Chromium cache. New sessions receive the
-   task text; resumed sessions receive a continuation message including `.children_done` when present.
-   Output appends to `codex-run.log`; the first session ID is saved in `.sid`. The most recent parsed
-   `tokens used` value from the accumulated log is written to `session_end` (zero if the log has no parsed value).
-4. A nonempty `children.json` array below the depth cap launches one background runner process per child.
-   The solver, not the runner, prepares each child's target crop, view, and brief. The parent runner waits
-   for all processes, records each `child_return`, saves the names with a `part.json` in `.children_done`,
-   and advances its cycle. Each child has its own Codex session; the parent resumes its original session.
-5. At cycle start, an existing `children.json` becomes `children.json.prev`. On a fresh runner invocation,
-   a node with `.sid`, no `part.json`, and unfinished previous children can emit `recover_children` and
-   launch only the missing children before resuming the parent. Existing child deliveries are identified
-   by file presence. This recovery still obeys the depth and cycle limits.
-6. When there are no executable child requests or the cycle limit is exhausted, the runner checks
-   `part.json` if present and emits `stop`. The entry point then prints a short tree summary and reports
-   whether the root `part.json` exists. The trace distinguishes invalid artifacts from missing ones;
-   the entry point's delivery message itself is based on file presence.
-
-`max-depth=4` means root depth 0 through depth 4. `max-cycles=3` bounds this runner loop per invocation,
-not the solver's internal edits or renders. If children are requested in the last cycle, they still run,
-but there is no additional parent session in that invocation. Cycle numbering restarts when resuming
-through a new runner invocation. Sibling parallelism has no separate cap in `solve_recursive.sh`.
-
-The checker accepts a nonempty `components` collection (also as the top-level list), rejecting duplicate
-IDs among dictionary entries, or an existing module path named by `module`, `entry`, `main`, or `file`;
-the `export` symbol is optional. Children may be flat or nested node IDs, relative paths, or objects
-carrying `part`/`path` or `id`/`name`/`node`. Node IDs (and their last path segment) are resolved against
-the run's nearest `fractal/` root, the node's own directory, and its parent; explicit paths are relative
-to the node. Child references must resolve to an existing file or a directory containing `part.json`.
-It does not execute the export, judge image quality, or validate `account.md` and renders.
-`visual_stop` records that the final structural check passed; it is not an independent visual evaluation.
+1. `rcwm.sh` creates the private runtime home and run inputs, records conditions and the
+   output-contract hash, and captures launcher output in `logs/run.log`.
+2. `runner/solve_recursive.sh` selects runtime Python and delegates to `runner/run_node.py`.
+   A node lock prevents concurrent execution of the same node. Every task, including resumes,
+   receives the portable output contract. Inherited context remains in `manifest.json`.
+3. Each Codex invocation gets `logs/sessions/session-NNNN.log`; the transcript is also
+   appended to `logs/codex.log`. Structured node events go to `logs/events.jsonl` and are
+   serialized into run-level `trace/events.jsonl`. Events record actual exit status,
+   session purpose, elapsed time and usage parsed only from that invocation (unknown = null).
+4. Unique child IDs launch concurrent runners. The parent waits for zero process exits and
+   valid, sealed child deliveries. Invalid children cannot be reported as delivered. Failed
+   children are recorded in node/run result.json; resume can retry them while keeping valid
+   siblings. A request on the last cycle is rejected because no integration cycle remains.
+5. `part.json` is a v2 candidate, not a completion sentinel. `runner/delivery.py` validates
+   its schema, canonical PNGs, paths, inherited inputs and dependency tree. One bounded
+   packaging-only correction session is permitted by default. It is separately counted
+   and cannot change implementation files. Remaining failures exit nonzero.
+6. The runner writes `outputs/validation.json` with content hashes and marks node result.json
+   completed. The root additionally writes run-level result.json with public paths. Both
+   launch and resume verify that result before reporting success. This is packaging and
+   dependency-integrity validation, not a measured visual-quality threshold.
 
 ## Run directory layout
 
-```text
-$RCWM_ROOT/runs/<run-name>/
-  conditions.json                       entry-point configuration and available version information
-  camera-contract.json                  root-solver camera contract, shared by descendants
-  trace/
-    events.jsonl                        runner-generated JSON object per event
-    tree.json                           generated by trace_report.py
-    recursion_report.md                 generated by trace_report.py
-    score.json                          generated by score_run.py
-  fractal/
-    scene/                              root node (depth 0)
-      target.png                        unchanged input reference
-      view.json                         root framing note; child files describe their viewport
-      brief.md                          node task and environment location
-      manifest.json                     inherited interface/reference/camera/snapshot/instruction IDs
-      task.md                           substituted instruction, including depth-cap note if needed
-      codex-run.log                     appended Codex transcript across sessions
-      .sid                              session ID used for resume
-      children.json                     current requested child node names, when present
-      children.json.prev                previous request, retained for recovery
-      .children_done                    names of children whose part.json exists
-      part.json                         component collection or module delivery (export optional)
-      account.md                        solver's account of construction and completion
-      index.html, *.js                   solver-generated viewer and scene modules
-      final.png                         reference-camera render (actual declared name may differ)
-      final-hires.png                   optional output of render_views.sh
-      novel-views/                      optional output of render_views.sh / novel_views.mjs
-        view-L35.png, view-R35.png, view-orbit.png, view-close1.png, view-close2.png
-    <child>/                            same node layout; target.png is a magnified reference crop
+```
+runs/<run-id>/
+  conditions.json
+  camera-contract.json
+  result.json
+  logs/run.log
+  logs/runner.log
+  trace/events.jsonl
+  trace/tree.json
+  trace/recursion_report.md
+  fractal/<node-id>/
+    target.png, view.json, brief.md, manifest.json, task.md
+    children.json, part.json, account.md, result.json
+    index.html                    # root viewer
+    outputs/final.png             # exact inherited target dimensions
+    outputs/comparison.png
+    outputs/overlay.png
+    outputs/compass/{000,090,180,270}.png
+    outputs/validation.json
+    logs/codex.log
+    logs/events.jsonl
+    logs/sessions/session-NNNN.log
+    src/                          # optional internal source organization
+    work/                         # drafts and diagnostics
 ```
 
-Nodes are siblings under `fractal/`, even when their logical depths differ; the trace supplies the tree.
-The matrix uses `runs/pilot/<scene>-<variant>-r<rep>/` instead. `conditions.json` is written by `rcwm.sh`;
-the matrix calls the runner directly and does not write that file. Camera, program, account, and render
-files depend on solver delivery; tree and score files depend on running the corresponding report tools.
+`children.json` is pending work; `part.json.children` is the delivered dependency graph.
+`manifest.json` is inherited provenance, distinct from the output manifest `part.json`.
+Internal `.sid`, `children.json.prev` and lock files are not final result interfaces.
+The new checker requires exact keys rather than accepting agent-invented synonyms.
 
-`conditions.json` contains `run`, `reference`, `instruction`, `instruction_sha256` (12 hex characters),
-`max_depth`, `max_cycles`, `model`, `reasoning_effort`, `codex_cli`, `codex_home`, `node`,
-`three`, `playwright`, `python`, and `code_commit`. Version probes may be empty or null when unavailable.
-`manifest.json` contains `interface_version: 1`, `reference_sha256` (12 hex characters or `pending`),
-`camera_hash`, `parent_snapshot`, and `solver_hash`. It is created once and reused on subsequent invocations.
+## Structured logs
 
-## Trace event schema
-
-Every line in `trace/events.jsonl` has the following common fields, emitted by `log_ev` in the runner:
-
-| Field | Type | Meaning |
-|---|---|---|
-| `run_id` | string | fifth runner argument; the entry point uses the run name |
-| `node_id` | string | this node's directory name |
-| `parent_id` | string | parent node name; `-` for the root |
-| `depth` | integer | root is 0 |
-| `cycle` | integer | current runner cycle, starting at 1; a final stop can be `max-cycles + 1` |
-| `event` | string | one of the six event names below |
-| `ts` | string | timestamp from `date -Is`, including timezone offset |
-| `solver_hash` | string | first 12 hex characters of the selected instruction's SHA-256 |
-| `camera_hash` | string | first 12 hex characters of the camera contract's SHA-256, or `none` |
-| `parent_snapshot` | string | short Git HEAD resolved in the runtime context, or `none` |
-
-| Event | Additional fields | Trigger |
-|---|---|---|
-| `session_start` | `model`: string; `reasoning`: string | immediately before starting/resuming Codex |
-| `session_end` | `usage_total`: integer | after the Codex process returns; latest parsed usage from the accumulated node log |
-| `child_call` | `child`: string | parent launches a child runner |
-| `child_return` | `child`: string; `delivered`: boolean | after waiting for children; boolean tests `part.json` existence |
-| `recover_children` | `children`: array of strings | missing prior children are relaunched without a parent session first |
-| `stop` | `stop_reason`: string | `visual_stop`, `invalid_artifact`, or `no_artifact` |
-
-Instruction, camera, and snapshot identifiers are captured once per runner invocation; a camera written
-later does not change that invocation's `camera_hash`. `parent_snapshot` is not a new per-node commit.
-An interrupted process may have a `session_start` without its matching end/stop. Report readers skip
-unparseable lines and repair the older empty `usage_total` encoding to zero. `trace_report.py` builds
-edges from `child_call`, sums session-end usage per node, and retains the latest recorded stop reason.
-If a resumed session prints no usage, the runner can repeat an earlier session's parsed value;
-the trace report then sums that repeated value too. Zero is used only when no usage can be parsed from the log.
+See [event schema](../schemas/event-v2.schema.json) and
+[result schema](../schemas/result-v2.schema.json). Every event includes schema_version,
+invocation/run/node/parent identity, cycle, depth, timestamp and instruction/camera hashes.
+Sessions include modeling/packaging purpose and relative transcript path; session_end adds
+actual process exit, elapsed seconds, usage and transport warning counts. Child return
+reports validated delivery, not existence. Stop reasons use completed or a concrete failure
+status. Old visual_stop events can still be read, but are not interpreted as v2 validation.
 
 ## Entry point, runner, and setup interfaces
 
@@ -230,7 +165,7 @@ the trace report then sums that repeated value too. Zero is used only when no us
 |---|---|---|
 | [rcwm.sh](../rcwm.sh) | `<reference.png> <run-name> [max-depth=4] [max-cycles=3]` | Full launch described above. `RCWM_ROOT` defaults to `<repo>/runtime`; `RCWM_PROMPT` overrides the instruction; `RCWM_MODEL` / `RCWM_REASONING` default to `gpt-6-astra` / `high`. `RCWM_CLEAN_CODEX_HOME=0` disables private-home setup; `RCWM_CODEX_CONFIG` supplies a custom config. Incoming `CODEX_HOME` (otherwise `~/.codex`) supplies the login. Exports `RCWM_CODE`, `RCWM_MAXD`, and `RCWM_MAXCYC`; positional depth/cycles replace incoming values of those two variables. |
 | [runner/solve_recursive.sh](../runner/solve_recursive.sh) | `<chain> <node> [parent_id=-] [depth=0] [run_id=r0]` | Chain is relative to `RCWM_ROOT` or absolute. Reads `RCWM_CODE`, `RCWM_ROOT`, `RCWM_MAXD=4`, `RCWM_MAXCYC=3`, `RCWM_PROMPT` (English template by default), `RCWM_MODEL`, `RCWM_REASONING`, `CODEX_HOME`, and `PLAYWRIGHT_BROWSERS_PATH` (default `~/.cache/ms-playwright`). Direct calls do not build a private home. |
-| [runner/check_part.py](../runner/check_part.py) | `<part.json>` | Accepts nonempty component lists with unique IDs or existing `module`/`entry`/`main`/`file` paths with optional `export`. Resolves flat/nested child IDs against the run's `fractal/` root, node directory, and parent; also accepts relative paths and child objects. Prints `ok ...` on accepted structure; exits nonzero on failed checks. No custom environment variables. |
+| [runner/check_part.py](../runner/check_part.py) | `<part.json>` | Validates v2 packaging and dependencies; `--strict` rejects legacy manifests. Unversioned historical inputs use check_part_legacy.py. Use runtime Python for Pillow image checks. |
 | [runner/trace_report.py](../runner/trace_report.py) | `<run-dir>` | Reads the trace, writes `trace/tree.json` and `trace/recursion_report.md`, and prints the report. No custom environment variables. |
 | [setup/setup_runtime.sh](../setup/setup_runtime.sh) | `[runtime-root] [--metrics] [--python interpreter] [--conda env-name] [--node-from dir] [--recreate-venv]`; `-h` / `--help` | Default root is `<repo>/runtime` (the positional argument, not `RCWM_ROOT`, selects another location). `--python` overrides `PYTHON`; otherwise setup tries `python3.12`, then `python3`. `.python-version` selects CPython 3.12 for validation and new conda environments. Existing Python environments must also be 3.12. `RCWM_CONDA` selects conda/mamba/micromamba; `RCWM_NODE_VERSION=22.14.0` selects the Node download. `PLAYWRIGHT_BROWSERS_PATH` selects browser storage. Installs private Python packages, Node, three.js/Playwright, Chromium, and runs the smoke test. Existing tools are reused; Python packages are installed on each invocation. Conda supplies the interpreter for a private venv. `--recreate-venv` backs up and rebuilds it; old direct conda links migrate automatically. Python/pip installation runs in isolated mode. |
 | [setup/smoke_test.mjs](../setup/smoke_test.mjs) | `[runtime-root]` | Defaults to `RCWM_ROOT`, then the current directory. Starts a temporary localhost server, renders a 320×200 cube with runtime Playwright, and checks for red pixels with runtime Python/Pillow/numpy. Writes `runs/.smoke/index.html` and `smoke.png`. Playwright uses `PLAYWRIGHT_BROWSERS_PATH`. |
@@ -246,12 +181,12 @@ SciPy, scikit-image, LPIPS, open_clip, and pytest. The metrics file includes the
 |---|---|---|
 | [tools/new_workspace.sh](../tools/new_workspace.sh) | `<workspace-dir> [shared-runtime-root]` | Runtime argument defaults to `RCWM_RUNTIME`, then `<repo>/runtime`. Checks Python/Node, creates `runs/`, and symlinks `.venv` and `.render-tools`. Prints the absolute workspace path. Private Codex home is created later by the launch/home helper. |
 | [tools/make_codex_home.sh](../tools/make_codex_home.sh) | `<workspace-root>` | Existing workspace required. Reads login from `CODEX_HOME` or `~/.codex`, writes `.codex-home` (mode 700) and `auth.json` (600), installs the worldgen skill, and prints the home path. Uses `RCWM_CODEX_CONFIG` or a two-line config from `RCWM_MODEL` / `RCWM_REASONING`. It does not export `CODEX_HOME` into the caller. |
-| [tools/resume_run.sh](../tools/resume_run.sh) | `<run-name>` | Requires `$RCWM_ROOT/runs/<name>/fractal/scene`; exits early if root `part.json` exists, refuses a matching live runner, reuses an existing private home and refreshes its login from incoming `CODEX_HOME` or `~/.codex`. Reads `RCWM_ROOT`, `RCWM_PROMPT`, `RCWM_MAXD`, `RCWM_MAXCYC`; runner inherits model/effort and browser settings. Reuse the original settings: it does not load them from `conditions.json`. |
+| [tools/resume_run.sh](../tools/resume_run.sh) | `<run-name>` | Requires `$RCWM_ROOT/runs/<name>/fractal/scene`; exits early only for a validated v2 result; the node lock refuses concurrent execution, reuses an existing private home and refreshes its login from incoming `CODEX_HOME` or `~/.codex`. Reads `RCWM_ROOT`, `RCWM_PROMPT`, `RCWM_MAXD`, `RCWM_MAXCYC`; runner inherits model/effort and browser settings. Reuse the original settings: it does not load them from `conditions.json`. |
 | [tools/diagnose_run.sh](../tools/diagnose_run.sh) | `<run-dir>` | Reads only the run's own files, with no model or network calls. Prints recorded conditions, tree depth/counts, sessions, tokens, wall time, stop reasons, delivered/missing parts, PNG render counts, and log failure signatures (Chromium, sandbox, disk, quota, connections, Python imports, three.js). Lists logs without a session ID and the root log header, then points to the root render and target. Requires `fractal/` and `python3`; no custom environment variables. |
-| [tools/score_run.py](../tools/score_run.py) | `<scene-name> <run-dir> [label]` | Label defaults to the run directory's basename. Uses `RCWM_REFS` (default checked-in pilot scenes), `RCWM_ROOT` (otherwise inferred from run path), and optional `RCWM_SCORES` JSONL append destination. Sets `RCWM_OURS_CHAIN` to the supplied run before importing pickers. For a final render and existing reference, runs metrics with the same Python interpreter. Writes/prints `trace/score.json`: render/finality, metrics, nodes/depth/per-level counts, parts, tokens in millions, and wall minutes. Tokens come from all node logs; wall time is first-to-last trace event. |
+| [tools/score_run.py](../tools/score_run.py) | `<scene-name> <run-dir> [label]` | Label defaults to the run directory's basename. Uses `RCWM_REFS` (default checked-in pilot scenes), `RCWM_ROOT` (otherwise inferred from run path), and optional `RCWM_SCORES` JSONL append destination. Sets `RCWM_OURS_CHAIN` to the supplied run before importing pickers. For a final render and existing reference, runs metrics with the same Python interpreter. Writes/prints `trace/score.json`: render/finality, metrics, nodes/depth/per-level counts, parts, tokens in millions, and wall minutes. V2 tokens come from individual session_end events (legacy tokens use node logs); wall time is first-to-last trace event. |
 | [tools/view.sh](../tools/view.sh) | `<run-dir-or-workspace-root> [port=8000] [host=127.0.0.1]` | A run is recognized by `fractal/scene`; its workspace is inferred two directories above. `RCWM_ROOT_OVERRIDE` overrides that inference (needed for deeper layouts such as matrix runs). Uses runtime Node, falling back to `node` on PATH; executes `view_server.mjs`. |
 | [tools/view_server.mjs](../tools/view_server.mjs) | `<workspace-root> [--port N] [--host address]` | Direct invocation uses `RCWM_VIEW_PORT`, otherwise port 0 (OS-selected); explicit `--port` wins. Host defaults to localhost. Serves the workspace, hooks served three.js, and injects OrbitControls into HTML under `runs/`. Prints root viewer URLs for immediate children of `runs/`; deeper pages can be opened by their URL. `?clean=1` hides viewer overlays. Does not rewrite delivered files. |
-| [tools/render_views.sh](../tools/render_views.sh) | `<run-dir> [scale=4] [ready-expr] [WxH]` | Requires root `part.json` and `index.html`. `RCWM_ROOT` overrides workspace inference (two directories above the run). Uses runtime Node, falling back to PATH. Frame size comes from `final.png`, `FINAL.png`, then `target.png`; otherwise harness default. Calls high-resolution and novel-view renderers in sequence. Inherits browser/ready-timeout settings below. |
+| [tools/render_views.sh](../tools/render_views.sh) | `<run-dir> [scale=4] [ready-expr] [WxH]` | Requires root `part.json` and `index.html`. `RCWM_ROOT` overrides workspace inference (two directories above the run). Uses runtime Node, falling back to PATH. Frame size comes from `outputs/final.png`, `final.png`, `FINAL.png`, then `target.png`; otherwise harness default. Calls high-resolution and novel-view renderers in sequence, writing optional outputs under `work/postprocess/` so canonical evidence stays unchanged. Inherits browser/ready-timeout settings below. |
 
 Private-home creation installs the repo's worldgen skill but does not purge unrelated skill directories
 already present in a reused private home. Use a fresh workspace for the paper's clean-home condition.
@@ -321,6 +256,8 @@ with a plain append fallback. The matrix does not call the private-home helper o
 ## Render selection rules
 
 The shared rules live in [experiments/pickers.py](../experiments/pickers.py).
+
+For v2 runs, `ours` first validates `result.json` and the complete sealed dependency tree, then returns `fractal/scene/outputs/final.png`. Invalid v2 deliveries never fall back to filename guesses. The Ours row below describes unversioned historical runs only.
 `_img_ok` requires a file of at least 1000 bytes that Pillow can verify. Explicit final filenames use this
 check without a minimum image width/height. Generic `newest` searches additionally require width ≥ 400
 and height ≥ 300, exclude diagnostic/reference/side-view names from `EXCL`, and reject paths containing

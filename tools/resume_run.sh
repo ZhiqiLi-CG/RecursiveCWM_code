@@ -14,8 +14,12 @@ export RCWM_MAXD="${RCWM_MAXD:-4}" RCWM_MAXCYC="${RCWM_MAXCYC:-3}"
 export RCWM_PROMPT="${RCWM_PROMPT:-$RCWM_CODE/solver/solver-template.md}"
 R="$RCWM_ROOT/runs/$NAME"
 [ -d "$R/fractal/scene" ] || { echo "no run at $R"; exit 1; }
-[ -f "$R/fractal/scene/part.json" ] && { echo "$NAME already delivered: $R/fractal/scene/part.json"; exit 0; }
-if pgrep -f "^bash .*solve_recursive[.]sh runs/$NAME " >/dev/null; then echo "$NAME is still running"; exit 1; fi
+if "$RCWM_ROOT/.venv/bin/python" "$RCWM_CODE/runner/delivery.py" "$R" --run >/dev/null 2>&1; then
+  echo "$NAME already validated: $R/result.json"; exit 0
+fi
+mkdir -p "$R/logs"
+exec > >(tee -a "$R/logs/run.log") 2>&1
+
 if [ -d "$RCWM_ROOT/.codex-home" ]; then
   SRC="${CODEX_HOME:-$HOME/.codex}"
   [ -f "$SRC/auth.json" ] && cp "$SRC/auth.json" "$RCWM_ROOT/.codex-home/auth.json" && chmod 600 "$RCWM_ROOT/.codex-home/auth.json"
@@ -23,5 +27,10 @@ if [ -d "$RCWM_ROOT/.codex-home" ]; then
 fi
 echo "resuming $R  (instruction $RCWM_PROMPT, depth $RCWM_MAXD, cycles $RCWM_MAXCYC${CODEX_HOME:+, codex home $CODEX_HOME})"
 bash "$RCWM_CODE/runner/solve_recursive.sh" "runs/$NAME" scene - 0 "$NAME"
+RUN_STATUS=$?
 python3 "$RCWM_CODE/runner/trace_report.py" "$R" 2>/dev/null | tail -3
-[ -f "$R/fractal/scene/part.json" ] && echo "delivered: $R/fractal/scene/part.json" || echo "still not delivered — see $R/fractal/scene/codex-run.log"
+if [ "$RUN_STATUS" -eq 0 ] && "$RCWM_ROOT/.venv/bin/python" "$RCWM_CODE/runner/delivery.py" "$R" --run; then
+  echo "delivered: $R/result.json"; exit 0
+fi
+echo "not completed — see $R/result.json and $R/fractal/scene/logs/codex.log"
+exit 1

@@ -1,5 +1,6 @@
 """Shared final-render selection rules for all methods (figures and tables). Return (path or None, whether the method reached its own stopping state)."""
 import glob, os, re, sys, json
+from pathlib import Path
 from PIL import Image
 EXCL=('reference','mask','target','attribution','comparison','compare','sheet','pair','grid','audit','zone','inventory','contact',
       'overlay','native','rear','east','west','north','south','orbit','zoom','detail','calibration','check','review','replay',
@@ -36,6 +37,18 @@ def ours_chain(root,SC):
     return f'{root}/runs/pilot/{SC}-recursive-{OURS_RUN.get(SC,"r1")}'
 def ours(root,SC):
     d=f'{ours_chain(root,SC)}/fractal/scene'
+    chain=ours_chain(root,SC)
+    try:
+        part=json.loads(Path(f'{d}/part.json').read_text()) if os.path.isfile(f'{d}/part.json') else {}
+        conditions=json.loads(Path(f'{chain}/conditions.json').read_text()) if os.path.isfile(f'{chain}/conditions.json') else {}
+        strict=os.path.isfile(f'{chain}/result.json') or (isinstance(part,dict) and 'schema_version' in part) or conditions.get('output_contract_version')==2
+        if strict:
+            sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'runner'))
+            from delivery import check_run
+            return str(check_run(chain)),True
+    except (ValueError,OSError,TypeError):
+        return None,False
+
     for n in ['final.png','FINAL.png']:
         if os.path.isfile(f'{d}/{n}') and _img_ok(f'{d}/{n}'): return f'{d}/{n}',True
     delivered=os.path.isfile(f'{d}/part.json')

@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RCWM event v2",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "node_id",
+    "parent_id",
+    "cycle",
+    "invocation_id",
+    "ts",
+    "depth",
+    "event"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "node_id": {
+      "type": "string"
+    },
+    "parent_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cycle": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "invocation_id": {
+      "type": "string"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "depth": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "event": {
+      "enum": [
+        "session_start",
+        "session_end",
+        "child_call",
+        "child_return",
+        "recover_children",
+        "validation_failed",
+        "stop"
+      ]
+    },
+    "exit_code": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "usage_total": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "purpose": {
+      "enum": [
+        "modeling",
+        "packaging"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "session_end"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "session",
+          "purpose",
+          "exit_code",
+          "elapsed_seconds",
+          "usage_total",
+          "log"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "child_return"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "child",
+          "delivered",
+          "exit_code"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "stop"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "status",
+          "stop_reason",
+          "exit_code"
+        ]
+      }
+    }
+  ]
+}

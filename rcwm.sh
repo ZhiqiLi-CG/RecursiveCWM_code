@@ -14,6 +14,7 @@
 set -uo pipefail
 REF="${1:?usage: rcwm.sh <reference.png> <run-name> [max-depth=4] [max-cycles=3]}"
 NAME="${2:?usage: rcwm.sh <reference.png> <run-name> [max-depth=4] [max-cycles=3]}"
+[ "$(basename -- "$NAME")" = "$NAME" ] && [[ "$NAME" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "invalid run name"; exit 2; }
 export RCWM_MAXD="${3:-4}" RCWM_MAXCYC="${4:-3}"
 export RCWM_CODE="$(cd "$(dirname "$0")" && pwd)"
 export RCWM_ROOT="${RCWM_ROOT:-$RCWM_CODE/runtime}"
@@ -45,7 +46,8 @@ CODEX_VER=$(codex --version 2>/dev/null | grep -o '[0-9][0-9.]*' | head -1)
 case "$CODEX_VER" in 0.153*|0.154*) ;; *) echo "note: codex CLI $CODEX_VER; the paper used 0.153 (0.154 verified compatible); the runner parses its 'session id' and 'tokens used' lines";; esac
 CH="runs/$NAME"; D="$RCWM_ROOT/$CH/fractal/scene"
 [ -e "$D/target.png" ] && { echo "run exists: $RCWM_ROOT/$CH (pick another name, or rerun the runner to resume)"; exit 1; }
-mkdir -p "$D" "$RCWM_ROOT/$CH/trace"
+mkdir -p "$D" "$RCWM_ROOT/$CH/trace" "$RCWM_ROOT/$CH/logs"
+exec > >(tee -a "$RCWM_ROOT/$CH/logs/run.log") 2>&1
 cp "$REF" "$D/target.png"
 echo '{"note":"root chooses its own framing"}' > "$D/view.json"
 cat > "$D/brief.md" <<B
@@ -63,7 +65,7 @@ def v(cmd):
 def pkg(name):
     try: return json.load(open("$RCWM_ROOT/.render-tools/node_modules/"+name+"/package.json"))["version"]
     except Exception: return None
-d={"run":"$RCWM_ROOT/$CH","reference":"$REF","instruction":"$RCWM_PROMPT",
+d={"output_contract_version":2,"output_contract_sha256":hashlib.sha256(open("$RCWM_CODE/docs/output-contract.md","rb").read()).hexdigest(),"run":"$RCWM_ROOT/$CH","reference":"$REF","instruction":"$RCWM_PROMPT",
    "instruction_sha256":hashlib.sha256(open("$RCWM_PROMPT","rb").read()).hexdigest()[:12],
    "max_depth":int("$RCWM_MAXD"),"max_cycles":int("$RCWM_MAXCYC"),"model":"$RCWM_MODEL","reasoning_effort":"$RCWM_REASONING",
    "codex_cli":"$CODEX_VER","codex_home":"$HOME_NOTE",
@@ -77,13 +79,13 @@ echo "run:      $RCWM_ROOT/$CH"
 echo "solver:   $RCWM_PROMPT  (max depth $RCWM_MAXD, max cycles/node $RCWM_MAXCYC)"
 echo "trace:    $RCWM_ROOT/$CH/trace/events.jsonl"
 bash "$RCWM_CODE/runner/solve_recursive.sh" "$CH" scene - 0 "$NAME"
+RUN_STATUS=$?
 echo
 python3 "$RCWM_CODE/runner/trace_report.py" "$RCWM_ROOT/$CH" 2>/dev/null | tail -3
-if [ -f "$D/part.json" ]; then
+if [ "$RUN_STATUS" -eq 0 ] && "$RCWM_ROOT/.venv/bin/python" "$RCWM_CODE/runner/delivery.py" "$RCWM_ROOT/$CH" --run; then
   echo "delivered: $D/part.json"
-  ls "$D"/final.png "$D"/FINAL.png 2>/dev/null | sed 's/^/render:    /'
+  echo "result: $RCWM_ROOT/$CH/result.json"
   exit 0
-else
-  echo "no scene/part.json delivered — see $D/codex-run.log and the trace"
-  exit 1
 fi
+echo "run failed — see $RCWM_ROOT/$CH/result.json and $D/logs/codex.log"
+exit 1

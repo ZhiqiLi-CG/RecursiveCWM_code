@@ -62,7 +62,7 @@ solve and calibrate one first and verify the full-frame overlay by eye before lo
    otherwise finish.
 4. **Finish**: write __CHAIN__/fractal/__NODE__/part.json (this level's final component, with
    child references) + account.md (this level's round-by-round account). part.json on disk
-   means this level is done.
+   is a delivery candidate; runner validation determines completion. The mandatory v2 output/log contract is appended to this task.
 
 ## Completion (at every level)
 First identify: what this is, in what style, and what a complete instance of its kind looks

@@ -34,12 +34,19 @@ if os.path.isfile(ev):
         ts.append(e['ts'])
         if e.get('event') == 'session_start': dep[e['node_id']] = e['depth']
 c = collections.Counter(dep.values()); out['nodes'] = len(dep); out['depth'] = max(c) if c else 0; out['per_level'] = [c[i] for i in range(out['depth'] + 1)]
-out['parts'] = len(glob.glob(os.path.join(run, 'fractal', '*', 'part.json')))
+out['parts'] = len(glob.glob(os.path.join(run, 'fractal', '**', 'part.json'), recursive=True))
 tok = 0
-for f in glob.glob(os.path.join(run, 'fractal', '**', 'codex-run.log'), recursive=True):
-    for s in open(f, errors='ignore').read().split('tokens used')[1:]:
-        try: tok += int(s.strip().split()[0].replace(',', ''))
-        except Exception: pass
+if os.path.isfile(os.path.join(run, 'result.json')) and os.path.isfile(ev):
+    for line in open(ev):
+        try:
+            event=json.loads(line)
+            if event.get('event')=='session_end': tok += event.get('usage_total') or 0
+        except ValueError: pass
+else:
+    for f in glob.glob(os.path.join(run, 'fractal', '**', 'codex-run.log'), recursive=True):
+        for text in open(f, errors='ignore').read().split('tokens used')[1:]:
+            try: tok += int(text.strip().split()[0].replace(',', ''))
+            except Exception: pass
 out['tokens_M'] = round(tok / 1e6, 2)
 if ts:
     t0 = datetime.datetime.fromisoformat(ts[0]); t1 = datetime.datetime.fromisoformat(ts[-1]); out['wall_min'] = int((t1 - t0).total_seconds() / 60)

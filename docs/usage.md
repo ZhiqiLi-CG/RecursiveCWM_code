@@ -1,5 +1,11 @@
 # Complete operating guide
 
+New runs use the [v2 result and log contract](output-contract.md): the canonical image is
+`fractal/scene/outputs/final.png`; `result.json` records validated completion.
+Node transcripts are `logs/codex.log` and `logs/sessions/session-NNNN.log`.
+Historical paper runs retain their original filenames and unversioned manifests.
+
+
 [Project front page](../README.md) · [Code structure](code-structure.md)
 
 Commands below run from the repository root unless a command changes directory.
@@ -413,7 +419,7 @@ $RCWM_ROOT/.render-tools/node/bin/node setup/smoke_test.mjs $RCWM_ROOT   # the r
 - **`codex CLI not found` / `RCWM_ROOT … is not a runtime root`.** Install and log in to codex; run `setup/setup_runtime.sh`.
 - **A node loops asking for children at the deepest level.** The runner appends a max-depth note to the instruction at
   `RCWM_MAXD`; if you lowered the cap after a launch, resume with the same cap.
-- **`hit your usage limit` in a `codex-run.log`.** The model's quota ran out: sessions end without delivering. Wait or
+- **`hit your usage limit` in `logs/codex.log` (legacy: `codex-run.log`).** The model's quota ran out: sessions end without delivering. Wait or
   log in with another account, then `tools/resume_run.sh <name>` (it copies the fresh `auth.json` into the private home).
 - **Every session fails at once.** Check `df`: a full disk (ENOSPC) kills renders and codex silently.
 - **Chromium does not launch.** `sudo npx playwright install-deps chromium` in `$RCWM_ROOT/.render-tools`; keep
@@ -422,8 +428,9 @@ $RCWM_ROOT/.render-tools/node/bin/node setup/smoke_test.mjs $RCWM_ROOT   # the r
   (bundled or CDN three); render with the viewer's own controls, or point the page's import at `/.render-tools/node_modules/three/build/three.module.js`.
 - **The harness waits three minutes before capturing.** The viewer sets no `window.ready` flag; pass your own ready
   expression as the fourth argument, or lower `RCWM_READY_TIMEOUT_MS`.
-- **`pickers.ours` warns "no recognised final render name".** The node delivered but named its render unusually; look in
-  `fractal/scene/`, then pass it with `RCWM_OURS_OVERRIDE=scene=/path.png` or add the name to `part.json`'s `evidence.final_render`.
+- **No final render selected.** For v2 inspect run `result.json` and node `outputs/validation.json`;
+  missing/invalid/stale evidence is rejected even when final.png exists. For historical runs the
+  legacy filename selector may need an explicit archival index; do not rewrite original trial history.
 - **The solver behaves differently on another machine.** Compare `runs/<name>/conditions.json` with the table in §13:
   the instruction hash, model, effort, codex home and versions are all there. `codex home: … the machine's own` means the
   run was started with `RCWM_CLEAN_CODEX_HOME=0` and sees that machine's skills.

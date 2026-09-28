@@ -12,9 +12,12 @@ kids = collections.defaultdict(list)
 info = {}
 for e in evs:
     n = e['node_id']
-    info.setdefault(n, {'depth': e['depth'], 'parent': e['parent_id'], 'sessions': 0, 'usage': 0, 'stop': None})
+    info.setdefault(n, {'depth': e['depth'], 'parent': e['parent_id'], 'sessions': 0, 'usage': 0, 'stop': None, 'modeling_sessions': 0, 'packaging_sessions': 0, 'failed_sessions': 0, 'unknown_usage_sessions': 0})
     if e['event'] == 'session_end':
         info[n]['sessions'] += 1
+        info[n]['packaging_sessions' if e.get('purpose')=='packaging' else 'modeling_sessions'] += 1
+        info[n]['failed_sessions'] += int(e.get('exit_code') not in (None,0))
+        info[n]['unknown_usage_sessions'] += int(e.get('usage_total') is None)
         info[n]['usage'] += e.get('usage_total') or 0   # per-session tokens, summed over the node's sessions
     if e['event'] == 'child_call' and e.get('child'):
         if e['child'] not in kids[n]: kids[n].append(e['child'])
@@ -27,7 +30,7 @@ out = {'roots': [tree(r) for r in roots]}
 lines = ['# Recursion trace (real call tree)', '']
 def emit(n, ind=0):
     i = info[n]
-    lines.append(f"{'  '*ind}- solve({n}) depth={i['depth']} sessions={i['sessions']} usage≈{i['usage']} stop={i['stop']}")
+    lines.append(f"{'  '*ind}- solve({n}) depth={i['depth']} sessions={i['sessions']} (modeling={i['modeling_sessions']}, packaging={i['packaging_sessions']}, failed={i['failed_sessions']}) usage≈{i['usage']} stop={i['stop']}")
     for k in kids[n]: emit(k, ind+1)
 for r in roots: emit(r)
 maxd = max((i['depth'] for i in info.values()), default=0)
