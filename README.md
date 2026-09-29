@@ -10,7 +10,7 @@
 
 > **Status: This release is still being tested and completed and may be unstable in places.**
 > **The upcoming stable release, version_1.0, is still undergoing testing and optimization.**
-> **You are welcome to try it and send feedback and suggestions through GitHub issues.**
+> **We'd love for you to try it! Share your feedback, ideas, and suggestions through GitHub issues—your input helps us make Recursive Code World Models better.**
 
 ![Recursive Code World Models teaser](https://zhiqili-cg.github.io/RecursiveCWM/images/teaser.webp)
 
