@@ -1,4 +1,5 @@
 <h1 align="center">Recursive Code World Models</h1>
+<p align="center"><strong>Version 0.1</strong></p>
 <p align="center">Building Complex Worlds through Recursive Scene Programs</p>
 <p align="center">Zhiqi Li · Yuxuan Liao · Bo Zhu</p>
 <p align="center">
